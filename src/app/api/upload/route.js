@@ -1,5 +1,7 @@
 import { put } from "@vercel/blob";
 import ffmpeg from "fluent-ffmpeg";
+import ffmpegStatic from "ffmpeg-static";
+ffmpeg.setFfmpegPath(ffmpegStatic);
 import fs from "fs";
 import path from "path";
 import { promisify } from "util";
