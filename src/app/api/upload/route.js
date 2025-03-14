@@ -38,20 +38,7 @@ export async function POST(req) {
         const fileBuffer = Buffer.from(await file.arrayBuffer());
 
         // Upload video file
-        const videoBlob = await put(file.name, fileBuffer, { access: "public", token });
-
-        try {
-            const { stdout, stderr } = await execPromise("which ffmpeg");
-            console.log("✅ FFmpeg found at:", stdout.trim());
-        } catch (ffmpegError) {
-            console.error("❌ FFmpeg not found!", ffmpegError);
-            return new Response(JSON.stringify({ error: "FFmpeg is not available on the server" }), {
-                status: 500,
-                headers: { "Content-Type": "application/json" }
-            });
-        }
-      
-
+        const videoBlob = await put(file.name, fileBuffer, { access: "public", token })
         // Ensure /tmp directory exists
         const tempDir = "/tmp";
         if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
