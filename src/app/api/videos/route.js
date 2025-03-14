@@ -23,16 +23,16 @@ export async function GET(){
             }
         */
         const videos = files.blobs.filter(file =>file.pathname.endsWith(".mov") || file.pathname.endsWith(".mp4"));
-        const thumbnails = files.blobs.filter(file => file.pathname.endsWith(".jpg"));
+        //const thumbnails = files.blobs.filter(file => file.pathname.endsWith(".jpg"));
 
         //loops through all videos in storage , for each video, we try to find its corresponding thumbnail
         const gallery = videos.map(video =>{
             const videoName = video.pathname.split(".")[0]; // Get base filename
-            const thumbnail = thumbnails.find(thumb => thumb.pathname.startsWith(videoName));
+            //const thumbnail = thumbnails.find(thumb => thumb.pathname.startsWith(videoName));
 
             return {
                 videoUrl: video.url,
-                thumbnailUrl: thumbnail ? thumbnail.url : null, //returns the matching thumbnail URL
+                //thumbnailUrl: thumbnail ? thumbnail.url : null, //returns the matching thumbnail URL
             };
 
         });
