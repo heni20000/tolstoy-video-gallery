@@ -14,6 +14,7 @@ Features
 -Status Updates: Visual feedback for upload and processing status
 
 Project Structure
+
 src/
 ├── app/
 │   ├── api/
