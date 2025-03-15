@@ -16,7 +16,6 @@ export default function VideoUploader({ onUploadComplete }) {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState({})
   const [uploadStatus, setUploadStatus] = useState({})
-  const [isDragActive, setIsDragActive] = useState(false)
   const fileInputRef = useRef(null)
 
   // Handle file selection from input
@@ -49,86 +48,6 @@ export default function VideoUploader({ onUploadComplete }) {
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
-  }
-
-  // Handle drag events
-  const handleDragOver = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragActive(true)
-  }
-
-  const handleDragLeave = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragActive(false)
-  }
-
-  const handleDrop = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragActive(false)
-
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const droppedFiles = Array.from(e.dataTransfer.files).filter((file) => file.type.startsWith("video/"))
-      addNewFiles(droppedFiles)
-    }
-  }
-
-  // Add new files to the state
-  const addNewFiles = (newFiles) => {
-    // Create a new array with the newly accepted files
-    const fileObjects = newFiles.map((file) => ({
-      id: `${file.name}-${Date.now()}`, // Create a unique ID
-      file,
-      status: "ready", // Initial status
-    }))
-
-    // Add new files to the existing files
-    setFiles((prevFiles) => [...prevFiles, ...fileObjects])
-
-    // Initialize progress for new files
-    const newProgress = {}
-    const newStatus = {}
-    fileObjects.forEach((fileObj) => {
-      newProgress[fileObj.id] = 0
-      newStatus[fileObj.id] = "ready"
-    })
-
-    setUploadProgress((prev) => ({ ...prev, ...newProgress }))
-    setUploadStatus((prev) => ({ ...prev, ...newStatus }))
-  }
-
-  // Trigger file input click
-  const openFileDialog = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click()
-    }
-  }
-
-  // Remove a file from the queue
-  const removeFile = (id) => {
-    setFiles((prevFiles) => prevFiles.filter((fileObj) => fileObj.id !== id))
-
-    // Also clean up progress and status
-    setUploadProgress((prev) => {
-      const newProgress = { ...prev }
-      delete newProgress[id]
-      return newProgress
-    })
-
-    setUploadStatus((prev) => {
-      const newStatus = { ...prev }
-      delete newStatus[id]
-      return newStatus
-    })
-  }
-
-  // Clear all files
-  const clearFiles = () => {
-    setFiles([])
-    setUploadProgress({})
-    setUploadStatus({})
   }
 
   // Upload a single file with progress tracking
@@ -228,37 +147,18 @@ export default function VideoUploader({ onUploadComplete }) {
     // Filter out null results (failed uploads)
     const successfulUploads = uploadResults.filter((result) => result !== null)
 
-    // Notify parent component
+    // Only proceed if there were successful uploads
     if (onUploadComplete && typeof onUploadComplete === "function" && successfulUploads.length > 0) {
-      onUploadComplete(successfulUploads)
+      // Add a 1-second delay before refreshing both the uploader and gallery
+      setTimeout(() => {
+        // Notify parent component to refresh the gallery
+        onUploadComplete(successfulUploads)
 
-      // Clear the uploader after successful uploads
-      setFiles([])
-      setUploadProgress({})
-      setUploadStatus({})
-    }
-  }
-
-  // Retry a failed upload
-  const retryUpload = async (id) => {
-    const fileObj = files.find((f) => f.id === id)
-    if (!fileObj) return
-
-    setUploadProgress((prev) => ({ ...prev, [id]: 0 }))
-    setUploadStatus((prev) => ({ ...prev, [id]: "ready" }))
-
-    try {
-      setUploading(true)
-      const result = await uploadFile(fileObj)
-      setUploading(false)
-
-      // Notify parent component
-      if (onUploadComplete && typeof onUploadComplete === "function") {
-        onUploadComplete([result])
-      }
-    } catch (error) {
-      setUploading(false)
-      console.error(`Failed to retry upload for ${fileObj.file.name}:`, error)
+        // Clear the uploader after the delay
+        setFiles([])
+        setUploadProgress({})
+        setUploadStatus({})
+      }, 1000) // 1 second delay
     }
   }
 
@@ -303,16 +203,11 @@ export default function VideoUploader({ onUploadComplete }) {
 
   return (
     <div className="p-6 border rounded-lg shadow-lg bg-white">
-      {/* Header */}
+      {/* Header - Removed Clear All button */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold flex items-center text-blue-700">
           <span className="text-2xl mr-2">📤</span> Upload Videos
         </h2>
-        {files.length > 0 && (
-          <button onClick={clearFiles} className="text-sm text-gray-500 hover:text-gray-700" disabled={uploading}>
-            Clear All
-          </button>
-        )}
       </div>
 
       {/* File Selection */}
@@ -337,7 +232,7 @@ export default function VideoUploader({ onUploadComplete }) {
         <p className="mt-1 text-xs text-gray-500">Supports MP4, MOV, AVI, and WebM formats</p>
       </div>
 
-      {/* File List */}
+      {/* File List - Removed Remove buttons */}
       {files.length > 0 && (
         <div className="mt-4 mb-4">
           <h3 className="text-md font-medium mb-2 text-blue-700">Selected Videos ({files.length})</h3>
@@ -345,39 +240,16 @@ export default function VideoUploader({ onUploadComplete }) {
             {files.map(({ id, file }) => {
               const { text, color, bgColor } = getStatusInfo(id)
               const progress = uploadProgress[id] || 0
-              const status = uploadStatus[id]
 
               return (
                 <div key={id} className="bg-gray-50 rounded-lg p-3">
-                  {/* File Info */}
+                  {/* File Info - Removed Remove button */}
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-sm font-medium truncate text-blue-500" title={file.name}>
                       {file.name}
                     </span>
                     <div className="flex items-center">
-                      <span className="text-xs text-gray-500 mr-2">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
-
-                      {/* Action buttons based on status */}
-                      {status === "error" ? (
-                        <button
-                          onClick={() => retryUpload(id)}
-                          disabled={uploading}
-                          className="text-xs text-blue-500 hover:text-blue-700 mr-2"
-                        >
-                          Retry
-                        </button>
-                      ) : (
-                        status !== "uploading" &&
-                        status !== "processing" && (
-                          <button
-                            onClick={() => removeFile(id)}
-                            disabled={uploading}
-                            className="text-xs text-gray-500 hover:text-gray-700"
-                          >
-                            Remove
-                          </button>
-                        )
-                      )}
+                      <span className="text-xs text-gray-500">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
                     </div>
                   </div>
 
