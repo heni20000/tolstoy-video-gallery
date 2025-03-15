@@ -1,3 +1,9 @@
+/**
+ * API Route for Video Upload
+ *
+ * Handles video file uploads, processes them through Cloudinary for thumbnail generation,
+ * and stores both the video and thumbnail in Vercel Blob storage.
+ */
 import { put } from "@vercel/blob"
 import { v2 as cloudinary } from "cloudinary"
 
@@ -8,12 +14,19 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 })
 
+/**
+ * POST handler for video uploads
+ *
+ * @param {Request} req - The incoming request with FormData containing the video file
+ * @returns {Response} JSON response with video and thumbnail URLs or error message
+ */
 export async function POST(req) {
   try {
     // Extract form data from the request
     const formData = await req.formData()
     const file = formData.get("file")
 
+    // Validate file input
     if (!file) {
       console.log("No file received!")
       return new Response(JSON.stringify({ error: "No file uploaded" }), {
@@ -24,6 +37,7 @@ export async function POST(req) {
 
     console.log("File received:", file.name, file.type)
 
+    // Validate Blob storage token
     const token = process.env.BLOB_READ_WRITE_TOKEN
     if (!token) {
       console.error("Missing BLOB_READ_WRITE_TOKEN!")
@@ -33,7 +47,7 @@ export async function POST(req) {
       })
     }
 
-    // Convert file to Buffer
+    // Convert file to Buffer for storage
     const fileBuffer = Buffer.from(await file.arrayBuffer())
 
     // Upload video file to Vercel Blob
@@ -41,13 +55,12 @@ export async function POST(req) {
     console.log("Video uploaded to Vercel Blob:", videoBlob.url)
 
     // Upload video to Cloudinary for thumbnail generation
-    // We need to create a temporary file URL for Cloudinary to access
     const uploadResponse = await new Promise((resolve, reject) => {
       cloudinary.uploader.upload(
         videoBlob.url,
         {
           resource_type: "video",
-          // Generate a thumbnail at 2 seconds into the video
+          // generates a thumbnail at 2 seconds into the video
           eager: [
             { format: "jpg", transformation: [{ width: 640, height: 360, crop: "fill" }, { start_offset: "2" }] },
           ],
@@ -80,6 +93,7 @@ export async function POST(req) {
     })
     console.log("Thumbnail uploaded to Vercel Blob:", thumbnailBlob.url)
 
+    // returns success response with URLs
     return new Response(
       JSON.stringify({
         videoUrl: videoBlob.url,

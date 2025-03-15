@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+Tolstoy Video Gallery
 
-## Getting Started
+A modern, responsive video gallery application that allows users to upload videos, automatically generate thumbnails, and display videos in an interactive carousel.
 
-First, run the development server:
+live demo : https://tolstoy-video-gallery.vercel.app/
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+-Video Upload: Simple interface for uploading video files
+-Automatic Thumbnail Generation: Creates thumbnails from uploaded videos
+-Responsive Gallery: Displays videos in a responsive, swipeable carousel
+-Video Playback: Click on thumbnails to play videos directly in the gallery
+-Progress Tracking: Real-time upload progress indicators
+-Status Updates: Visual feedback for upload and processing status
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+Project Structure
+src/
+├── app/
+│   ├── api/
+│   │   ├── upload/
+│   │   │   └── route.js    # API route for video uploads
+│   │   └── videos/
+│   │       └── route.js    # API route for fetching videos
+│   ├── globals.css         # Global styles
+│   ├── layout.js           # Root layout
+│   └── page.js             # Main page component
+├── components/
+│   ├── VideoGallery.js     # Video gallery component
+│   └── VideoUploader.js    # Video upload component
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Technologies Used
 
-## Learn More
+-Frontend:
+  - Next.js 13+ (App Router)
+  - React 18
+  - Tailwind CSS for styling
+  - Swiper for carousel functionality
 
-To learn more about Next.js, take a look at the following resources:
+-Backend:
+  - Next.js API Routes
+  - Vercel Blob Storage for video and thumbnail storage
+  - Cloudinary for video processing and thumbnail generation
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+-Testing & Development:
+  - Postman for API testing and validation
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+Environment Variables
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Create a `.env.local` file in the root directory with the following variables:

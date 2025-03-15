@@ -5,44 +5,87 @@ import { useState, useRef } from "react"
 /**
  * VideoUploader Component
  *
- * Simplified version with multiple file selection and upload
- * with progress tracking for each file
+ * A component that allows users to select and upload multiple video files
+ * with progress tracking for each file. The component handles file selection,
+ * upload progress visualization, and status updates.
  *
  * @param {Object} props
- * @param {Function} props.onUploadComplete - Callback function when uploads finish
+ * @param {Function} props.onUploadComplete - Callback function called when uploads finish successfully
+ *                                           with an array of upload results
  */
 export default function VideoUploader({ onUploadComplete }) {
-  const [files, setFiles] = useState([])
-  const [uploading, setUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState({})
-  const [uploadStatus, setUploadStatus] = useState({})
-  const fileInputRef = useRef(null)
+  // State management for files and upload process
+  const [files, setFiles] = useState([]) // Stores the selected files
+  const [uploading, setUploading] = useState(false) // Tracks if uploads are in progress
+  const [uploadProgress, setUploadProgress] = useState({}) // Tracks upload progress percentage by file ID
+  const [uploadStatus, setUploadStatus] = useState({}) // Tracks status (ready, uploading, processing, complete, error)
+  const fileInputRef = useRef(null) // Reference to the file input element
 
-  // Handle file selection from input
+  /**
+   * Handles file selection from the file input
+   * Creates unique IDs for each file and initializes their progress and status
+   *
+   * @param {Event} event - The file input change event
+   */
   const handleFileChange = (event) => {
     const selectedFiles = Array.from(event.target.files)
     if (selectedFiles.length === 0) return
 
-    // Create a new array with the newly selected files
-    const fileObjects = selectedFiles.map((file) => ({
-      id: `${file.name}-${Date.now()}`, // Create a unique ID
-      file,
-      status: "ready", // Initial status
-    }))
+    // Check for file size limits in production
+    const oversizedFiles = selectedFiles.filter((file) => isFileTooLarge(file))
+    if (oversizedFiles.length > 0) {
+      alert(
+        `The following files exceed the 5MB limit for the live demo:\n${oversizedFiles.map((f) => f.name).join("\n")}\n\nPlease select smaller files or run the app locally for larger uploads.`,
+      )
 
-    // Add new files to the existing files
-    setFiles((prevFiles) => [...prevFiles, ...fileObjects])
+      // Filter out oversized files
+      const validFiles = selectedFiles.filter((file) => !isFileTooLarge(file))
+      if (validFiles.length === 0) {
+        // Reset the file input if all files were too large
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ""
+        }
+        return
+      }
 
-    // Initialize progress for new files
-    const newProgress = {}
-    const newStatus = {}
-    fileObjects.forEach((fileObj) => {
-      newProgress[fileObj.id] = 0
-      newStatus[fileObj.id] = "ready"
-    })
+      // Continue with valid files only
+      const fileObjects = validFiles.map((file) => ({
+        id: `${file.name}-${Date.now()}`,
+        file,
+        status: "ready",
+      }))
 
-    setUploadProgress((prev) => ({ ...prev, ...newProgress }))
-    setUploadStatus((prev) => ({ ...prev, ...newStatus }))
+      setFiles((prevFiles) => [...prevFiles, ...fileObjects])
+
+      const newProgress = {}
+      const newStatus = {}
+      fileObjects.forEach((fileObj) => {
+        newProgress[fileObj.id] = 0
+        newStatus[fileObj.id] = "ready"
+      })
+
+      setUploadProgress((prev) => ({ ...prev, ...newProgress }))
+      setUploadStatus((prev) => ({ ...prev, ...newStatus }))
+    } else {
+      // No oversized files, proceed normally
+      const fileObjects = selectedFiles.map((file) => ({
+        id: `${file.name}-${Date.now()}`,
+        file,
+        status: "ready",
+      }))
+
+      setFiles((prevFiles) => [...prevFiles, ...fileObjects])
+
+      const newProgress = {}
+      const newStatus = {}
+      fileObjects.forEach((fileObj) => {
+        newProgress[fileObj.id] = 0
+        newStatus[fileObj.id] = "ready"
+      })
+
+      setUploadProgress((prev) => ({ ...prev, ...newProgress }))
+      setUploadStatus((prev) => ({ ...prev, ...newStatus }))
+    }
 
     // Reset the file input so the same file can be selected again if needed
     if (fileInputRef.current) {
@@ -50,7 +93,13 @@ export default function VideoUploader({ onUploadComplete }) {
     }
   }
 
-  // Upload a single file with progress tracking
+  /**
+   * Uploads a single file with progress tracking using XMLHttpRequest
+   * Updates status and progress throughout the upload process
+   *
+   * @param {Object} fileObj - The file object containing id and file
+   * @returns {Promise} - Resolves with the server response or rejects with an error
+   */
   const uploadFile = async (fileObj) => {
     const { id, file } = fileObj
     const formData = new FormData()
@@ -113,8 +162,13 @@ export default function VideoUploader({ onUploadComplete }) {
     }
   }
 
-  // Upload all files simultaneously
+  /**
+   * Uploads all files simultaneously that haven't been uploaded yet
+   * Manages the overall upload process and calls the onUploadComplete callback
+   * when finished successfully
+   */
   const uploadAllFiles = async () => {
+    // Don't proceed if there are no files or uploads are already in progress
     if (files.length === 0 || uploading) return
 
     setUploading(true)
@@ -123,6 +177,7 @@ export default function VideoUploader({ onUploadComplete }) {
 
     // Start all uploads simultaneously
     files.forEach((fileObj) => {
+      // Only upload files that aren't already complete
       if (uploadStatus[fileObj.id] !== "complete") {
         const promise = uploadFile(fileObj)
           .then((result) => {
@@ -162,10 +217,15 @@ export default function VideoUploader({ onUploadComplete }) {
     }
   }
 
-  // Get appropriate status text and color
+  /**
+   * Determines the appropriate status text and styling based on file status
+   *
+   * @param {string} id - The file ID
+   * @returns {Object} - Object containing text, text color, and background color
+   */
   const getStatusInfo = (id) => {
     const status = uploadStatus[id]
-    const progress = uploadProgress[id]
+    const progress = uploadProgress[id] || 0
 
     switch (status) {
       case "uploading":
@@ -201,16 +261,55 @@ export default function VideoUploader({ onUploadComplete }) {
     }
   }
 
+  /**
+   * Determines the button text based on the current state
+   * Extracted to avoid nested ternary operations
+   *
+   * @returns {string} - The text to display on the upload button
+   */
+  const getButtonText = () => {
+    if (uploading) {
+      return "Uploading..."
+    }
+
+    if (files.length === 0) {
+      return "Select Files to Upload"
+    }
+
+    if (files.every((f) => uploadStatus[f.id] === "complete")) {
+      return "All Files Uploaded"
+    }
+
+    const pendingCount = files.filter((f) => uploadStatus[f.id] !== "complete").length
+    return `Upload ${pendingCount} Video${pendingCount !== 1 ? "s" : ""}`
+  }
+
+  /**
+   * Checks if a file exceeds the size limit in production environment
+   * Only applies the 5MB limit in production (live demo)
+   *
+   * @param {File} file - The file to check
+   * @returns {boolean} - True if the file is too large in production
+   */
+  const isFileTooLarge = (file) => {
+    // Only apply 5MB limit in production (live demo)
+    if (process.env.NODE_ENV === "production") {
+      const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB in bytes
+      return file.size > MAX_FILE_SIZE
+    }
+    return false // No limit in development
+  }
+
   return (
     <div className="p-6 border rounded-lg shadow-lg bg-white">
-      {/* Header - Removed Clear All button */}
+      {/* Component Header */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold flex items-center text-blue-700">
           <span className="text-2xl mr-2">📤</span> Upload Videos
         </h2>
       </div>
 
-      {/* File Selection */}
+      {/* File Selection Section */}
       <div className="mb-4">
         <label className="block mb-2 text-sm font-medium text-gray-700">Select videos to upload</label>
         <div className="flex items-center gap-2">
@@ -229,10 +328,15 @@ export default function VideoUploader({ onUploadComplete }) {
             />
           </label>
         </div>
-        <p className="mt-1 text-xs text-gray-500">Supports MP4, MOV, AVI, and WebM formats</p>
+        <p className="mt-1 text-xs text-gray-500">
+          Supports MP4, MOV, AVI, and WebM formats
+          {process.env.NODE_ENV === "production" && (
+            <span className="ml-1 text-red-500 font-medium">(5MB max file size in live demo)</span>
+          )}
+        </p>
       </div>
 
-      {/* File List - Removed Remove buttons */}
+      {/* File List Section - Only shown when files are selected */}
       {files.length > 0 && (
         <div className="mt-4 mb-4">
           <h3 className="text-md font-medium mb-2 text-blue-700">Selected Videos ({files.length})</h3>
@@ -243,7 +347,7 @@ export default function VideoUploader({ onUploadComplete }) {
 
               return (
                 <div key={id} className="bg-gray-50 rounded-lg p-3">
-                  {/* File Info - Removed Remove button */}
+                  {/* File Information */}
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-sm font-medium truncate text-blue-500" title={file.name}>
                       {file.name}
@@ -255,7 +359,14 @@ export default function VideoUploader({ onUploadComplete }) {
 
                   {/* Progress Bar */}
                   <div className="w-full bg-gray-200 rounded-full h-2.5">
-                    <div className={`h-2.5 rounded-full ${bgColor}`} style={{ width: `${progress}%` }}></div>
+                    <div
+                      className={`h-2.5 rounded-full ${bgColor}`}
+                      style={{ width: `${progress}%` }}
+                      role="progressbar"
+                      aria-valuenow={progress}
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                    ></div>
                   </div>
 
                   {/* Status Text */}
@@ -274,16 +385,9 @@ export default function VideoUploader({ onUploadComplete }) {
         onClick={uploadAllFiles}
         disabled={uploading || files.length === 0 || files.every((f) => uploadStatus[f.id] === "complete")}
         className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+        aria-busy={uploading}
       >
-        {uploading
-          ? "Uploading..."
-          : files.length === 0
-            ? "Select Files to Upload"
-            : files.every((f) => uploadStatus[f.id] === "complete")
-              ? "All Files Uploaded"
-              : `Upload ${files.filter((f) => uploadStatus[f.id] !== "complete").length} Video${
-                  files.filter((f) => uploadStatus[f.id] !== "complete").length !== 1 ? "s" : ""
-                }`}
+        {getButtonText()}
       </button>
     </div>
   )
