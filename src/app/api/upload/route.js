@@ -1,101 +1,101 @@
-import { put } from "@vercel/blob";
-// import ffmpeg from "fluent-ffmpeg";
-// import ffmpegStatic from "ffmpeg-static";
-// //ffmpeg.setFfmpegPath(ffmpegStatic);
-import fs from "fs";
-import path from "path";
-import { promisify } from "util";
-import { exec } from "child_process";
+import { put } from "@vercel/blob"
+import { v2 as cloudinary } from "cloudinary"
 
-const execPromise = promisify(exec);
+// Configure Cloudinary with environment variables
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+})
 
 export async function POST(req) {
-    try {
-        // Extract form data from the request
-        const formData = await req.formData();
-        const file = formData.get("file");
+  try {
+    // Extract form data from the request
+    const formData = await req.formData()
+    const file = formData.get("file")
 
-        if (!file) {
-            console.log("No file received!"); 
-            return new Response(JSON.stringify({ error: "No file uploaded" }), {
-                status: 400,
-                headers: { "Content-Type": "application/json" }
-            });
-        }
-
-        console.log("File received:", file.name, file.type); 
-
-        const token = process.env.BLOB_READ_WRITE_TOKEN;
-        if (!token) {
-            console.error("Missing BLOB_READ_WRITE_TOKEN!");
-            return new Response(JSON.stringify({ error: "Server misconfiguration: Missing token" }), {
-                status: 500,
-                headers: { "Content-Type": "application/json" }
-            });
-        }
-
-        // Convert file to Buffer
-        const fileBuffer = Buffer.from(await file.arrayBuffer());
-
-        // Upload video file
-        const videoBlob = await put(file.name, fileBuffer, { access: "public", token })
-        // Ensure /tmp directory exists
-        const tempDir = "/tmp";
-        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
-
-
-        const trytempFilePath = path.join("/tmp", file.name);
-        try {
-            await fs.promises.writeFile(trytempFilePath, "Test data");
-            console.log("✅ Successfully wrote to /tmp");
-        } catch (fsError) {
-            console.error("❌ Failed to write to /tmp:", fsError);
-            return new Response(JSON.stringify({ error: "Cannot write to /tmp directory" }), {
-                status: 500,
-                headers: { "Content-Type": "application/json" }
-            });
-        }
-
-        const tempFilePath = path.join(tempDir, file.name);
-        const thumbnailPath = path.join(tempDir, `${file.name}.jpg`);
-        
-
-        // Download video from Vercel Blob Storage
-        const videoResponse = await fetch(videoBlob.url);
-        const videoBuffer = Buffer.from(await videoResponse.arrayBuffer());
-        // await fs.promises.writeFile(tempFilePath, videoBuffer);
-
-        // // Run FFmpeg to generate thumbnail
-        // try {
-        //     await execPromise(`ffmpeg -i ${tempFilePath} -ss 00:00:02 -vframes 1 ${thumbnailPath}`);
-        // } catch (err) {
-        //     console.error("FFmpeg error:", err);
-        //     return new Response(JSON.stringify({ error: "FFmpeg processing failed" }), {
-        //         status: 500,
-        //         headers: { "Content-Type": "application/json" }
-        //     });
-        // }
-
-        // Upload the thumbnail
-        //const thumbnailBlob = await put(`${file.name}.jpg`, fs.createReadStream(thumbnailPath), { access: "public", token });
-
-        // Cleanup temporary files
-        if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
-        //if (fs.existsSync(thumbnailPath)) fs.unlinkSync(thumbnailPath);
-
-        return new Response(JSON.stringify({
-            videoUrl: videoBlob.url,
-            //thumbnailUrl: thumbnailBlob.url
-        }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" }
-        });
-
-    } catch (error) {
-        console.error("Error:", error);
-        return new Response(JSON.stringify({ error: "Failed to upload video" }), {
-            status: 500,
-            headers: { "Content-Type": "application/json" }
-        });
+    if (!file) {
+      console.log("No file received!")
+      return new Response(JSON.stringify({ error: "No file uploaded" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      })
     }
+
+    console.log("File received:", file.name, file.type)
+
+    const token = process.env.BLOB_READ_WRITE_TOKEN
+    if (!token) {
+      console.error("Missing BLOB_READ_WRITE_TOKEN!")
+      return new Response(JSON.stringify({ error: "Server misconfiguration: Missing token" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    // Convert file to Buffer
+    const fileBuffer = Buffer.from(await file.arrayBuffer())
+
+    // Upload video file to Vercel Blob
+    const videoBlob = await put(file.name, fileBuffer, { access: "public", token })
+    console.log("Video uploaded to Vercel Blob:", videoBlob.url)
+
+    // Upload video to Cloudinary for thumbnail generation
+    // We need to create a temporary file URL for Cloudinary to access
+    const uploadResponse = await new Promise((resolve, reject) => {
+      cloudinary.uploader.upload(
+        videoBlob.url,
+        {
+          resource_type: "video",
+          // Generate a thumbnail at 2 seconds into the video
+          eager: [
+            { format: "jpg", transformation: [{ width: 640, height: 360, crop: "fill" }, { start_offset: "2" }] },
+          ],
+          eager_async: false,
+        },
+        (error, result) => {
+          if (error) {
+            console.error("Cloudinary upload error:", error)
+            reject(error)
+          } else {
+            console.log("Cloudinary upload success:", result)
+            resolve(result)
+          }
+        },
+      )
+    })
+
+    // Get the thumbnail URL from Cloudinary
+    const thumbnailUrl = uploadResponse.eager[0].secure_url
+    console.log("Thumbnail generated at:", thumbnailUrl)
+
+    // Download the thumbnail from Cloudinary
+    const thumbnailResponse = await fetch(thumbnailUrl)
+    const thumbnailBuffer = Buffer.from(await thumbnailResponse.arrayBuffer())
+
+    // Upload the thumbnail to Vercel Blob
+    const thumbnailBlob = await put(`${file.name}.thumbnail.jpg`, thumbnailBuffer, {
+      access: "public",
+      token,
+    })
+    console.log("Thumbnail uploaded to Vercel Blob:", thumbnailBlob.url)
+
+    return new Response(
+      JSON.stringify({
+        videoUrl: videoBlob.url,
+        thumbnailUrl: thumbnailBlob.url,
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    )
+  } catch (error) {
+    console.error("Error:", error)
+    return new Response(JSON.stringify({ error: "Failed to upload video" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
 }
+
