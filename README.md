@@ -13,22 +13,6 @@ Features
 -Progress Tracking: Real-time upload progress indicators
 -Status Updates: Visual feedback for upload and processing status
 
-Project Structure
-
-src/
-├── app/
-│   ├── api/
-│   │   ├── upload/
-│   │   │   └── route.js    # API route for video uploads
-│   │   └── videos/
-│   │       └── route.js    # API route for fetching videos
-│   ├── globals.css         # Global styles
-│   ├── layout.js           # Root layout
-│   └── page.js             # Main page component
-├── components/
-│   ├── VideoGallery.js     # Video gallery component
-│   └── VideoUploader.js    # Video upload component
-
 Technologies Used
 
 -Frontend:
