@@ -1,241 +1,417 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 
 /**
  * VideoUploader Component
  *
- * Handles uploading of video files with visual progress indicators
- * and communicates with parent component when uploads are complete.
+ * Simplified version with multiple file selection and upload
+ * with progress tracking for each file
  *
  * @param {Object} props
  * @param {Function} props.onUploadComplete - Callback function when uploads finish
  */
 export default function VideoUploader({ onUploadComplete }) {
-  const [selectedFiles, setSelectedFiles] = useState([])
+  const [files, setFiles] = useState([])
   const [uploading, setUploading] = useState(false)
-  const [progress, setProgress] = useState({}) // Tracks progress for each file
-  const [uploadedVideos, setUploadedVideos] = useState([])
+  const [uploadProgress, setUploadProgress] = useState({})
+  const [uploadStatus, setUploadStatus] = useState({})
+  const [isDragActive, setIsDragActive] = useState(false)
+  const fileInputRef = useRef(null)
 
-  // --- UI Helper Functions ---
+  // Handle file selection from input
+  const handleFileChange = (event) => {
+    const selectedFiles = Array.from(event.target.files)
+    if (selectedFiles.length === 0) return
 
-  /**
-   * Returns the appropriate CSS class for progress bar color
-   */
-  const getProgressBarColor = (progressValue) => {
-    if (progressValue === "Error") return "bg-red-500"
-    if (progressValue === 100) return "bg-green-500"
-    return "bg-blue-500"
-  }
+    // Create a new array with the newly selected files
+    const fileObjects = selectedFiles.map((file) => ({
+      id: `${file.name}-${Date.now()}`, // Create a unique ID
+      file,
+      status: "ready", // Initial status
+    }))
 
-  /**
-   * Calculates the width for the progress bar
-   */
-  const getProgressBarWidth = (progressValue) => {
-    return progressValue === "Error" ? 100 : progressValue
-  }
+    // Add new files to the existing files
+    setFiles((prevFiles) => [...prevFiles, ...fileObjects])
 
-  /**
-   * Returns status text with appropriate styling
-   */
-  const getProgressStatusText = (progressValue) => {
-    if (progressValue === "Error") {
-      return <span className="text-red-500">Upload failed</span>
-    }
-    if (progressValue === 100) {
-      return <span className="text-green-500">Upload complete</span>
-    }
-    if (progressValue > 80) {
-      return <span className="text-blue-500">Processing...</span>
-    }
-    return <span className="text-blue-500">Uploading: {progressValue}%</span>
-  }
-
-  // --- Event Handlers ---
-
-  /**
-   * Handles file selection from the input
-   */
-  function handleFileChange(event) {
-    const files = Array.from(event.target.files)
-
-    // Initialize progress tracking for each file
-    const initialProgress = {}
-    files.forEach((file) => {
-      initialProgress[file.name] = 0
+    // Initialize progress for new files
+    const newProgress = {}
+    const newStatus = {}
+    fileObjects.forEach((fileObj) => {
+      newProgress[fileObj.id] = 0
+      newStatus[fileObj.id] = "ready"
     })
 
-    setProgress(initialProgress)
-    setSelectedFiles(files)
+    setUploadProgress((prev) => ({ ...prev, ...newProgress }))
+    setUploadStatus((prev) => ({ ...prev, ...newStatus }))
+
+    // Reset the file input so the same file can be selected again if needed
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
   }
 
-  /**
-   * Uploads selected files with progress tracking
-   */
-  async function handleUpload() {
-    if (!selectedFiles.length) return
-
-    setUploading(true)
-    const newUploadedVideos = []
-
-    // Process each file sequentially
-    for (const file of selectedFiles) {
-      const formData = new FormData()
-      formData.append("file", file)
-
-      try {
-        // Set initial progress
-        setProgress((prev) => ({ ...prev, [file.name]: 5 }))
-
-        // Upload file and track progress
-        const result = await uploadFileWithProgress(file, formData)
-
-        // Update progress and store result
-        setProgress((prev) => ({ ...prev, [file.name]: 100 }))
-        newUploadedVideos.push(result)
-      } catch (error) {
-        console.error("Upload error:", error)
-        setProgress((prev) => ({ ...prev, [file.name]: "Error" }))
-      }
-    }
-
-    // Update state with newly uploaded videos
-    setUploadedVideos((prev) => [...prev, ...newUploadedVideos])
-    setUploading(false)
-
-    // Notify parent component
-    if (onUploadComplete && typeof onUploadComplete === "function") {
-      onUploadComplete(newUploadedVideos)
-    }
-
-    // Clear selected files after a delay (so user can see completion)
-    setTimeout(() => {
-      setSelectedFiles([])
-      setProgress({})
-    }, 3000)
+  // Handle drag events
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragActive(true)
   }
 
-  /**
-   * Uploads a file with progress tracking using XMLHttpRequest
-   */
-  function uploadFileWithProgress(file, formData) {
-    return new Promise((resolve, reject) => {
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragActive(false)
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragActive(false)
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const droppedFiles = Array.from(e.dataTransfer.files).filter((file) => file.type.startsWith("video/"))
+      addNewFiles(droppedFiles)
+    }
+  }
+
+  // Add new files to the state
+  const addNewFiles = (newFiles) => {
+    // Create a new array with the newly accepted files
+    const fileObjects = newFiles.map((file) => ({
+      id: `${file.name}-${Date.now()}`, // Create a unique ID
+      file,
+      status: "ready", // Initial status
+    }))
+
+    // Add new files to the existing files
+    setFiles((prevFiles) => [...prevFiles, ...fileObjects])
+
+    // Initialize progress for new files
+    const newProgress = {}
+    const newStatus = {}
+    fileObjects.forEach((fileObj) => {
+      newProgress[fileObj.id] = 0
+      newStatus[fileObj.id] = "ready"
+    })
+
+    setUploadProgress((prev) => ({ ...prev, ...newProgress }))
+    setUploadStatus((prev) => ({ ...prev, ...newStatus }))
+  }
+
+  // Trigger file input click
+  const openFileDialog = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click()
+    }
+  }
+
+  // Remove a file from the queue
+  const removeFile = (id) => {
+    setFiles((prevFiles) => prevFiles.filter((fileObj) => fileObj.id !== id))
+
+    // Also clean up progress and status
+    setUploadProgress((prev) => {
+      const newProgress = { ...prev }
+      delete newProgress[id]
+      return newProgress
+    })
+
+    setUploadStatus((prev) => {
+      const newStatus = { ...prev }
+      delete newStatus[id]
+      return newStatus
+    })
+  }
+
+  // Clear all files
+  const clearFiles = () => {
+    setFiles([])
+    setUploadProgress({})
+    setUploadStatus({})
+  }
+
+  // Upload a single file with progress tracking
+  const uploadFile = async (fileObj) => {
+    const { id, file } = fileObj
+    const formData = new FormData()
+    formData.append("file", file)
+
+    try {
+      // Update status to uploading
+      setUploadStatus((prev) => ({ ...prev, [id]: "uploading" }))
+
+      // Create XMLHttpRequest for progress tracking
       const xhr = new XMLHttpRequest()
 
-      // Set up progress tracking
+      // Track upload progress
       xhr.upload.addEventListener("progress", (event) => {
         if (event.lengthComputable) {
-          // Max 60% for upload (reserve 40% for server processing including Cloudinary)
+          // Max 60% for upload (reserve 40% for server processing)
           const uploadPercentage = Math.round((event.loaded / event.total) * 60)
-          setProgress((prev) => ({ ...prev, [file.name]: uploadPercentage }))
+          setUploadProgress((prev) => ({ ...prev, [id]: uploadPercentage }))
         }
       })
 
-      // Handle completion
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          // Set to 85% while processing thumbnail
-          setProgress((prev) => ({ ...prev, [file.name]: 85 }))
+      // Create a promise to handle the XHR request
+      const uploadPromise = new Promise((resolve, reject) => {
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            // Set to 80% while processing thumbnail
+            setUploadProgress((prev) => ({ ...prev, [id]: 80 }))
+            setUploadStatus((prev) => ({ ...prev, [id]: "processing" }))
 
-          // Parse the response
-          try {
-            const response = JSON.parse(xhr.responseText)
-            resolve(response)
-          } catch (e) {
-            reject(new Error("Invalid response format"))
+            try {
+              const response = JSON.parse(xhr.responseText)
+              // Set to 100% when complete
+              setUploadProgress((prev) => ({ ...prev, [id]: 100 }))
+              setUploadStatus((prev) => ({ ...prev, [id]: "complete" }))
+              resolve(response)
+            } catch (e) {
+              setUploadStatus((prev) => ({ ...prev, [id]: "error" }))
+              reject(new Error("Invalid response format"))
+            }
+          } else {
+            setUploadStatus((prev) => ({ ...prev, [id]: "error" }))
+            reject(new Error(`HTTP Error: ${xhr.status}`))
           }
-        } else {
-          reject(new Error(`HTTP Error: ${xhr.status}`))
         }
+
+        xhr.onerror = () => {
+          setUploadStatus((prev) => ({ ...prev, [id]: "error" }))
+          reject(new Error("Network Error"))
+        }
+
+        xhr.open("POST", "/api/upload")
+        xhr.send(formData)
+      })
+
+      return await uploadPromise
+    } catch (error) {
+      console.error(`Error uploading ${file.name}:`, error)
+      setUploadStatus((prev) => ({ ...prev, [id]: "error" }))
+      throw error
+    }
+  }
+
+  // Upload all files simultaneously
+  const uploadAllFiles = async () => {
+    if (files.length === 0 || uploading) return
+
+    setUploading(true)
+    const uploadResults = []
+    const uploadPromises = []
+
+    // Start all uploads simultaneously
+    files.forEach((fileObj) => {
+      if (uploadStatus[fileObj.id] !== "complete") {
+        const promise = uploadFile(fileObj)
+          .then((result) => {
+            uploadResults.push(result)
+            return result
+          })
+          .catch((error) => {
+            console.error(`Failed to upload ${fileObj.file.name}:`, error)
+            // We don't rethrow to allow other uploads to continue
+            return null
+          })
+
+        uploadPromises.push(promise)
       }
-
-      // Handle network errors
-      xhr.onerror = () => reject(new Error("Network Error"))
-
-      // Configure and send request
-      xhr.open("POST", "/api/upload")
-      xhr.send(formData)
     })
+
+    // Wait for all uploads to complete
+    await Promise.allSettled(uploadPromises)
+
+    setUploading(false)
+
+    // Filter out null results (failed uploads)
+    const successfulUploads = uploadResults.filter((result) => result !== null)
+
+    // Notify parent component
+    if (onUploadComplete && typeof onUploadComplete === "function" && successfulUploads.length > 0) {
+      onUploadComplete(successfulUploads)
+
+      // Clear the uploader after successful uploads
+      setFiles([])
+      setUploadProgress({})
+      setUploadStatus({})
+    }
+  }
+
+  // Retry a failed upload
+  const retryUpload = async (id) => {
+    const fileObj = files.find((f) => f.id === id)
+    if (!fileObj) return
+
+    setUploadProgress((prev) => ({ ...prev, [id]: 0 }))
+    setUploadStatus((prev) => ({ ...prev, [id]: "ready" }))
+
+    try {
+      setUploading(true)
+      const result = await uploadFile(fileObj)
+      setUploading(false)
+
+      // Notify parent component
+      if (onUploadComplete && typeof onUploadComplete === "function") {
+        onUploadComplete([result])
+      }
+    } catch (error) {
+      setUploading(false)
+      console.error(`Failed to retry upload for ${fileObj.file.name}:`, error)
+    }
+  }
+
+  // Get appropriate status text and color
+  const getStatusInfo = (id) => {
+    const status = uploadStatus[id]
+    const progress = uploadProgress[id]
+
+    switch (status) {
+      case "uploading":
+        return {
+          text: `Uploading: ${progress}%`,
+          color: "text-blue-500",
+          bgColor: "bg-blue-500",
+        }
+      case "processing":
+        return {
+          text: "Processing...",
+          color: "text-purple-500",
+          bgColor: "bg-purple-500",
+        }
+      case "complete":
+        return {
+          text: "Complete",
+          color: "text-green-500",
+          bgColor: "bg-green-500",
+        }
+      case "error":
+        return {
+          text: "Failed",
+          color: "text-red-500",
+          bgColor: "bg-red-500",
+        }
+      default:
+        return {
+          text: "Ready",
+          color: "text-gray-500",
+          bgColor: "bg-gray-300",
+        }
+    }
   }
 
   return (
     <div className="p-6 border rounded-lg shadow-lg bg-white">
       {/* Header */}
-      <h2 className="text-xl text-black font-semibold mb-4 flex items-center">
-        <span className="text-2xl mr-2 ">📤</span> Upload Videos
-      </h2>
-
-      {/* File Selection Area - Consistent size */}
-      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 mb-4 text-center hover:border-blue-500 transition-colors">
-        <label className="cursor-pointer block">
-          <input type="file" multiple accept="video/*" onChange={handleFileChange} className="hidden" />
-          <div className="flex flex-col items-center justify-center">
-            <svg
-              className="w-12 h-12 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-              ></path>
-            </svg>
-            <p className="mt-2 text-sm text-gray-600">
-              {selectedFiles.length > 0
-                ? `${selectedFiles.length} file(s) selected. Click to add more videos.`
-                : "Drag & drop videos here or click to browse"}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">Supports MP4, MOV, and other video formats</p>
-          </div>
-        </label>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold flex items-center text-blue-700">
+          <span className="text-2xl mr-2">📤</span> Upload Videos
+        </h2>
+        {files.length > 0 && (
+          <button onClick={clearFiles} className="text-sm text-gray-500 hover:text-gray-700" disabled={uploading}>
+            Clear All
+          </button>
+        )}
       </div>
 
-      {/* Selected Files List */}
-      {selectedFiles.length > 0 && (
+      {/* File Selection */}
+      <div className="mb-4">
+        <label className="block mb-2 text-sm font-medium text-gray-700">Select videos to upload</label>
+        <div className="flex items-center gap-2">
+          <label className="block cursor-pointer">
+            <span className="inline-block px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100 transition-colors">
+              Choose Files
+            </span>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="video/*"
+              multiple
+              className="hidden"
+              disabled={uploading}
+            />
+          </label>
+        </div>
+        <p className="mt-1 text-xs text-gray-500">Supports MP4, MOV, AVI, and WebM formats</p>
+      </div>
+
+      {/* File List */}
+      {files.length > 0 && (
         <div className="mt-4 mb-4">
-          <h3 className="text-md font-medium mb-2 text-blue-700">Selected Videos ({selectedFiles.length})</h3>
-          <div className="space-y-3">
-            {selectedFiles.map((file, index) => (
-              <div key={index} className="bg-black-50 rounded-lg p-3">
-                {/* File Name and Size */}
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-sm font-medium truncate text-black" title={file.name}>
-                    {file.name}
-                  </span>
-                  <span className="text-xs text-gray-500">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
-                </div>
+          <h3 className="text-md font-medium mb-2 text-blue-700">Selected Videos ({files.length})</h3>
+          <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+            {files.map(({ id, file }) => {
+              const { text, color, bgColor } = getStatusInfo(id)
+              const progress = uploadProgress[id] || 0
+              const status = uploadStatus[id]
 
-                {/* Progress Bar */}
-                <div className="w-full bg-black-200 rounded-full h-2.5">
-                  <div
-                    className={`h-2.5 rounded-full ${getProgressBarColor(progress[file.name])}`}
-                    style={{
-                      width: `${getProgressBarWidth(progress[file.name])}%`,
-                    }}
-                  ></div>
-                </div>
+              return (
+                <div key={id} className="bg-gray-50 rounded-lg p-3">
+                  {/* File Info */}
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-sm font-medium truncate text-blue-500" title={file.name}>
+                      {file.name}
+                    </span>
+                    <div className="flex items-center">
+                      <span className="text-xs text-gray-500 mr-2">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
 
-                {/* Status Text */}
-                <div className="mt-1 text-xs">{getProgressStatusText(progress[file.name])}</div>
-              </div>
-            ))}
+                      {/* Action buttons based on status */}
+                      {status === "error" ? (
+                        <button
+                          onClick={() => retryUpload(id)}
+                          disabled={uploading}
+                          className="text-xs text-blue-500 hover:text-blue-700 mr-2"
+                        >
+                          Retry
+                        </button>
+                      ) : (
+                        status !== "uploading" &&
+                        status !== "processing" && (
+                          <button
+                            onClick={() => removeFile(id)}
+                            disabled={uploading}
+                            className="text-xs text-gray-500 hover:text-gray-700"
+                          >
+                            Remove
+                          </button>
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="w-full bg-gray-200 rounded-full h-2.5">
+                    <div className={`h-2.5 rounded-full ${bgColor}`} style={{ width: `${progress}%` }}></div>
+                  </div>
+
+                  {/* Status Text */}
+                  <div className="mt-1 text-xs">
+                    <span className={color}>{text}</span>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
 
       {/* Upload Button */}
       <button
-        onClick={handleUpload}
-        disabled={uploading || selectedFiles.length === 0}
+        onClick={uploadAllFiles}
+        disabled={uploading || files.length === 0 || files.every((f) => uploadStatus[f.id] === "complete")}
         className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
       >
         {uploading
           ? "Uploading..."
-          : `Upload ${selectedFiles.length > 0 ? selectedFiles.length : ""} Video${selectedFiles.length !== 1 ? "s" : ""}`}
+          : files.length === 0
+            ? "Select Files to Upload"
+            : files.every((f) => uploadStatus[f.id] === "complete")
+              ? "All Files Uploaded"
+              : `Upload ${files.filter((f) => uploadStatus[f.id] !== "complete").length} Video${
+                  files.filter((f) => uploadStatus[f.id] !== "complete").length !== 1 ? "s" : ""
+                }`}
       </button>
     </div>
   )
